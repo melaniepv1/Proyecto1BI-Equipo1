@@ -26,7 +26,7 @@ sucursales = [
     ("Express Liberia", "Liberia", "Guanacaste", "Express"),
 ]
 
-# 2. PRODUCTO (nombre, categoria, subcategoria, marca, precio_lista)
+# 2. PRODUCTO
 P = [
  ("Leche entera 1L","Lácteos","Leche","Dos Pinos",1050),
  ("Leche semidescremada 1L","Lácteos","Leche","Dos Pinos",1050),
@@ -173,7 +173,7 @@ for _ in range(500):
 canales = [("Tienda física",),("En línea",),("App",)]
 metodos = [("Efectivo",),("Tarjeta débito",),("Tarjeta crédito",),("Transferencia",)]
 
-# 6. PROMOCION (nombre, tipo, inicio, fin, alcance, producto, categoria)
+# 6. PROMOCION
 PR = [
  ("Festival de Lácteos","Porcentaje","2024-10-07","2024-10-20","Categoria",None,"Lácteos"),
  ("2x1 Galletas Oreo","2x1","2024-10-14","2024-10-27","Producto","Galletas de chocolate 432g",None),
@@ -202,11 +202,96 @@ for n,t,i,f,a,p,c in PR:
     assert 7 <= d <= 42, n
     promociones.append((n,t,i,f,a,pid[p] if p else None,c))
 
+FECHA_INICIO = date(2024, 10, 1)
+FECHA_FIN = date(2025, 9, 30)
+N_VENTAS = 6000
 
-# =========================================================
-# PARTE 2 PENDIENTE: Aquí va la lógica de generación de
-# venta, detalle_venta, movimiento_inventario e inventario
-# =========================================================
+producto_by_id = {i + 1: p for i, p in enumerate(productos)}
+
+clientes_info = [(i + 1, date.fromisoformat(c[2]), c[1]) for i, c in enumerate(clientes)]
+peso_segmento = {"Frecuente": 3, "Ocasional": 2, "Nuevo": 1}
+
+promos_parsed = [
+    (i + 1, tipo, date.fromisoformat(ini), date.fromisoformat(fin), alcance, idprod, cat)
+    for i, (nombre, tipo, ini, fin, alcance, idprod, cat) in enumerate(promociones)
+]
+
+def cliente_valido(fecha_venta):
+    validos = [c for c in clientes_info if c[1] <= fecha_venta]
+    ids = [c[0] for c in validos]
+    pesos = [peso_segmento[c[2]] for c in validos]
+    return random.choices(ids, weights=pesos)[0]
+
+def promo_aplicable(producto_id, categoria, fecha_venta):
+    return [
+        pr for pr in promos_parsed
+        if pr[2] <= fecha_venta <= pr[3]
+        and ((pr[4] == "Producto" and pr[5] == producto_id) or (pr[4] == "Categoria" and pr[6] == categoria))
+    ]
+
+# 7-8. VENTA Y DETALLE_VENTA
+ventas = []
+detalles = []
+movimientos = []
+inventarios = []
+
+for _ in range(N_VENTAS):
+    fecha_venta = fecha_rand(FECHA_INICIO, FECHA_FIN)
+    id_sucursal = random.randint(1, len(sucursales))
+    id_cliente = cliente_valido(fecha_venta)
+    id_canal = random.randint(1, len(canales))
+    id_metodo = random.randint(1, len(metodos))
+
+    n_lineas = random.randint(1, 5)
+    total_venta = 0.0
+    lineas_venta = []
+    for _ in range(n_lineas):
+        id_producto = random.randint(1, len(productos))
+        nombre_p, categoria_p, _, _, _, precio_lista_p = producto_by_id[id_producto]
+        cantidad = random.randint(1, 4)
+        precio_unitario = precio_lista_p
+        descuento = 0.0
+        id_promocion = None
+
+        elegibles = promo_aplicable(id_producto, categoria_p, fecha_venta)
+        if elegibles and random.random() < 0.6:
+            id_promocion, tipo_promo = random.choice([(p[0], p[1]) for p in elegibles])
+            if tipo_promo == "2x1":
+                cantidad = 2
+                descuento = round(precio_unitario, 2)
+            elif tipo_promo == "Porcentaje":
+                descuento = round(precio_unitario * cantidad * random.uniform(0.10, 0.30), 2)
+            else:
+                monto = random.choice([200, 300, 400, 500])
+                descuento = round(min(monto, precio_unitario * cantidad * 0.9), 2)
+
+        subtotal = round(precio_unitario * cantidad - descuento, 2)
+        total_venta += subtotal
+        lineas_venta.append((id_producto, cantidad, precio_unitario, descuento, id_promocion))
+
+    id_venta = len(ventas) + 1
+    ventas.append((fecha_venta.isoformat(), id_sucursal, id_cliente, id_canal, id_metodo, round(total_venta, 2)))
+    for (id_producto, cantidad, precio_unitario, descuento, id_promocion) in lineas_venta:
+        detalles.append((id_venta, id_producto, cantidad, precio_unitario, descuento, id_promocion))
+
+# 9. MOVIMIENTO_INVENTARIO
+for _ in range(10000):
+    fecha_mov = fecha_rand(FECHA_INICIO, FECHA_FIN)
+    tipo_mov = random.choices(["Entrada", "Salida", "Ajuste"], weights=[0.4, 0.5, 0.1])[0]
+    movimientos.append((
+        fecha_mov.isoformat(), random.randint(1, len(sucursales)), random.randint(1, len(productos)),
+        tipo_mov, random.randint(1, 200)
+    ))
+
+# 10. INVENTARIO
+fecha_actual = FECHA_INICIO
+while fecha_actual <= FECHA_FIN:
+    for id_suc in range(1, len(sucursales) + 1):
+        for id_prod in range(1, len(productos) + 1):
+            stock_min = random.randint(5, 30)
+            stock_act = max(0, stock_min + random.randint(-10, 100))
+            inventarios.append((fecha_actual.isoformat(), id_suc, id_prod, stock_act, stock_min))
+    fecha_actual += timedelta(days=7)
 
 sql = [
  insert("sucursal", ["nombre","ciudad","region","tipo_sucursal"], sucursales),
@@ -215,7 +300,9 @@ sql = [
  insert("canal_venta", ["nombre"], canales),
  insert("metodo_pago", ["nombre"], metodos),
  insert("promocion", ["nombre","tipo_descuento","fecha_inicio","fecha_fin","alcance","id_producto_alcance","categoria_alcance"], promociones),
- # PARTE 2 PENDIENTE: agregar aquí las líneas insert(...) de
- # venta, detalle_venta, movimiento_inventario e inventario
+ insert("venta", ["fecha","id_sucursal","id_cliente","id_canal","id_metodo_pago","total"], ventas),
+ insert("detalle_venta", ["id_venta","id_producto","cantidad","precio_unitario","descuento","id_promocion"], detalles),
+ insert("movimiento_inventario", ["fecha","id_sucursal","id_producto","tipo_movimiento","cantidad"], movimientos),
+ insert("inventario", ["fecha","id_sucursal","id_producto","stock_actual","stock_minimo"], inventarios),
 ]
 open("datos_supermercado.sql","w",encoding="utf-8").write("\n".join(sql))
