@@ -40,7 +40,7 @@ Proyecto1BI-Equipo1:
 ## Contenido de cada sección del repositorio
 
 - `docs`: Informe del proyecto y archivo de presentación.
-- `sql`: Scripts del esquema transaccional, datos y modelo dimensional.
+- `sql`: Scripts del esquema transaccional, datos, modelo dimensional y validaciones.
 - `data`: Script utilizado para la generación de datos sintéticos.
 - `etl`: Transformaciones desarrolladas en Pentaho Data Integration.
 - `dashboard`: Solución analítica desarrollada en Power BI.
@@ -91,6 +91,15 @@ Después de cargar las dimensiones, ejecutar:
 - `etl_fact_ventas.ktr`
 - `etl_fact_inventario.ktr`
 
-### 7. Capa analítica
+### 7. Validar el modelo dimensional
+
+Una vez cargadas las dimensiones y tablas de hechos, ejecutar: 
+
+`sql/validaciones_modelo_dimensional.sql`
+
+Este script permite comprobar la cantidad de registros cargados, la granularidad de las tablas de hechos y la consistencia de
+algunas reglas del modelo dimensional. 
+
+### 8. Capa analítica
 
 Pendiente de implementación en Power BI Desktop.
